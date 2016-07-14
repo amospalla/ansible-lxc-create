@@ -1,0 +1,20 @@
+#!/bin/bash
+
+case "$1" in
+	exists)
+		if lxc-info --name "$2" 2>&1 | grep -q "^$2 doesn't exist$"
+		then
+			exit 1
+		else
+			exit 0
+		fi
+		;;
+	state)
+		if lxc-info --name "$2" --state --no-humanize | grep -q "RUNNING"
+		then
+			echo running
+		else
+			echo stopped
+		fi
+		;;
+esac

@@ -1,0 +1,33 @@
+---
+- name: Wait for listening ssh
+  local_action: wait_for
+  args:
+    port: 22
+    delay: 10
+    host: "{{ inventory_hostname }}"
+  delegate_to: "{{ lxc_host }}"
+
+# - name: Wait for listening ssh
+#   local_action: wait_for port=22 host="{{ ansible_ssh_host | default(inventory_hostname) }}" delay=0 timeout=300
+
+- name: Update repositories
+  raw: apt-get update
+  when: '("lxc-test-guest-debian" in group_names) or ("lxc-test-guest-ubuntu" in group_names)'
+  # when: hostvars[guest]['inventory_hostname'] in groups['lxc-test-guest-debian']
+  changed_when: False
+
+- name: Install Python (Debian)
+  raw: apt-get install python -y
+  when: '("lxc-test-guest-debian" in group_names) or ("lxc-test-guest-ubuntu" in group_names)'
+  # when: hostvars[guest]['inventory_hostname'] in groups['lxc-test-guest-debian']
+  changed_when: False
+
+- name: Install Python-simplejson (Centos)
+  raw: yum -y install python-simplejson
+  # when: hostvars[guest]['inventory_hostname'] in groups['lxc-test-guest-centos']
+  when: '"lxc-test-guest-centos" in group_names'
+# when: 'lxc_release < 7'
+  changed_when: False
+
+- name: Ping container
+  ping:

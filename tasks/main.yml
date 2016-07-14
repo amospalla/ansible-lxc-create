@@ -1,0 +1,137 @@
+---
+# Note, all tasks are delegated to LXC host, so instead of using
+# {{ hostvars[guest]['inventory_hostname'] }}
+# we are using
+# {{ inventory_hostname }} everytime
+
+####################################
+# Create container                 #
+####################################
+ 
+- name: Copy help script to lxc_host
+  copy:
+    src: lxc-ansible-helper
+    dest: /usr/local/bin
+    mode: 0755
+  delegate_to: "{{ lxc_host }}"
+  run_once: True
+
+- name: Get if container exists
+  command: /usr/local/bin/lxc-ansible-helper exists "{{ inventory_hostname }}"
+  register: container_exists_result
+  changed_when: False
+  ignore_errors: True
+  delegate_to: "{{ lxc_host }}"
+
+- name: Create lxc hosts
+  lxc_container:
+    name: "{{ inventory_hostname }}"
+    backing_store: dir
+    container_config: "{{ lxc_container_config }}"
+    template: "{{ lxc_template }}"
+    template_options: "--release {{ lxc_release }} --arch {{ lxc_arch }} {{ lxc_opts|default() }} "
+    state: stopped
+  when: container_exists_result.rc == 1
+  delegate_to: "{{ lxc_host }}"
+
+- name: Get if container is started
+  command: /usr/local/bin/lxc-ansible-helper state "{{ inventory_hostname }}"
+  changed_when: False
+  delegate_to: "{{ lxc_host }}"
+
+#############
+# Setup ssh #
+#############
+- name: Create /root/.ssh folder
+  file:
+    dest: /var/lib/lxc/{{ inventory_hostname }}/rootfs/root/.ssh
+    state: directory
+  delegate_to: "{{ lxc_host }}"
+
+- name: Copy ssh public key
+  copy:
+    src: id_rsa.pub
+    dest: /var/lib/lxc/{{ inventory_hostname }}/rootfs/root/.ssh/authorized_keys
+    mode: 0600
+  ignore_errors: True
+  delegate_to: "{{ lxc_host }}"
+
+#################
+# Setup network #
+#################
+- name: Debian | Set eth0 interface
+  template:
+    src: interfaces.j2
+    dest: /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/network/interfaces
+    mode: 0644
+  when: (lxc_template in ['debian','ubuntu'])
+  delegate_to: "{{ lxc_host }}"
+
+- name: Centos | Set eth0 interface
+  template:
+    src: etc_sysconfig_network-scripts_ifcfg-eth0.j2
+    dest: /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/sysconfig/network-scripts/ifcfg-eth0
+    mode: 0644
+  when: (lxc_template in ['centos'])
+  delegate_to: "{{ lxc_host }}"
+
+- name: Centos | Set eth0 interface
+  template:
+    src: etc_sysconfig_network.j2
+    dest: /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/sysconfig/network
+    mode: 0644
+  when: (lxc_template in ['centos'])
+  delegate_to: "{{ lxc_host }}"
+
+####################################
+# Start container                  #
+####################################
+- name: Get if container is started
+  command: /usr/local/bin/lxc-ansible-helper state "{{ inventory_hostname }}"
+  register: container_status_result
+  changed_when: False
+  delegate_to: "{{ lxc_host }}"
+
+- name: Start container
+  lxc_container:
+    name: "{{ inventory_hostname }}"
+    state: started
+  when: container_status_result.stdout in "stopped"
+  delegate_to: "{{ lxc_host }}"
+
+#######################
+# Debootstrap Ansible #
+#######################
+- name: root no enforce password change
+  replace:
+    dest: /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/shadow
+    regexp: '^root:(.*):0:(.*):(.*):(.*):(.*):(.*):$'
+    replace: 'root:\1::\2:\3:\4:\5:\6:'
+  when: 'lxc_release > 5'
+  delegate_to: "{{ lxc_host }}"
+
+- name: Wait for listening ssh
+  local_action: wait_for
+  args:
+    port: 22
+    delay: 3
+    host: "{{ inventory_hostname }}"
+
+- name: Debian | Install Python
+  raw: apt-get install python -y
+  when: (lxc_template in ['debian','ubuntu'])
+  changed_when: False
+
+- name: Centos | Install Python-simplejson
+  raw: yum -y install python-simplejson
+  when: (lxc_template in ['centos'] and lxc_release < 7)
+  changed_when: False
+  # ignore_errors: True
+
+#####################
+# Set root password #
+#####################
+- name: root password
+  user:
+    name: root
+    password: "{{ lxc_password_hash }}"
