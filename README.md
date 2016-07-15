@@ -15,6 +15,8 @@ Once containers are created and started raw commands are executed to install pyt
 
 Finally a root password is set on the containers.
 
+When _lxc_nameserver_ variable is defined /etc/resolv.conf is replaced with the single line "nameserver={{lxc_nameserver}}".
+
 ## Assumptions
 
 LXC containers rootfs reside on /var/lib/lxc/<container>.

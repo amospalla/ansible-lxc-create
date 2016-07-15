@@ -123,8 +123,8 @@
   ignore_errors: True
 
 - name: Set resolvconf nameservers
-  shell: "echo nameserver 192.168.100.250 > /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/resolv.conf"
-  when: ping_test.failed|default(False)
+  shell: "echo nameserver {{ lxc_nameserver }} > /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/resolv.conf"
+  when: ping_test.failed|default(False) and lxc_nameserver is defined
   changed_when: False
   delegate_to: "{{ lxc_host }}"
 
