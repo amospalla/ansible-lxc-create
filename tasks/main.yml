@@ -122,6 +122,20 @@
   register: ping_test
   ignore_errors: True
 
+- name: Get if resolv.conf is a symbolic link
+  stat:
+    path: /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/resolv.conf
+  when: ping_test.failed|default(False) and lxc_nameserver is defined
+  register: resolv_conf_stat
+  delegate_to: "{{ lxc_host }}"
+
+- name: Remove resolv.conf if it is a symbolic link
+  file:
+    path: /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/resolv.conf
+    state: absent
+  when: resolv_conf_stat.stat.islnk is defined and resolv_conf_stat.stat.islnk
+  delegate_to: "{{ lxc_host }}"
+
 - name: Set resolvconf nameservers
   shell: "echo nameserver {{ lxc_nameserver }} > /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/resolv.conf"
   when: ping_test.failed|default(False) and lxc_nameserver is defined
