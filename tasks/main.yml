@@ -117,16 +117,31 @@
     delay: 3
     host: "{{ inventory_hostname }}"
 
+- name: Test Ansible ping
+  ping:
+  register: ping_test
+  ignore_errors: True
+
+- name: Set resolvconf nameservers
+  shell: "echo nameserver 192.168.100.250 > /var/lib/lxc/{{ inventory_hostname }}/rootfs/etc/resolv.conf"
+  when: ping_test.failed|default(False)
+  changed_when: False
+  delegate_to: "{{ lxc_host }}"
+
+- name: Debian | apt-get update
+  raw: apt-get update
+  when: lxc_template in ['debian','ubuntu'] and ping_test.failed|default(False)
+  changed_when: False
+
 - name: Debian | Install Python
   raw: apt-get install python -y
-  when: (lxc_template in ['debian','ubuntu'])
+  when: lxc_template in ['debian','ubuntu'] and ping_test.failed|default(False)
   changed_when: False
 
 - name: Centos | Install Python-simplejson
   raw: yum -y install python-simplejson
-  when: (lxc_template in ['centos'] and lxc_release < 7)
+  when: lxc_template in ['centos'] and lxc_release < 7 and ping_test.failed|default(False)
   changed_when: False
-  # ignore_errors: True
 
 #####################
 # Set root password #
